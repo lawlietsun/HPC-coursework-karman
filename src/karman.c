@@ -9,6 +9,8 @@
 #include "init.h"
 #include "simulation.h"
 
+#include "mpi.h"
+
 void write_bin(float **u, float **v, float **p, char **flag,
      int imax, int jmax, float xlength, float ylength, char *file);
 
@@ -161,6 +163,9 @@ int main(int argc, char *argv[])
 
     if (init_case < 0) {
         /* Set initial values if file doesn't exist */
+// double t1, t2; 
+// t1 = MPI_Wtime(); 
+
         for (i=0;i<=imax+1;i++) {
             for (j=0;j<=jmax+1;j++) {
                 u[i][j] = ui;
@@ -168,9 +173,16 @@ int main(int argc, char *argv[])
                 p[i][j] = 0.0;
             }
         }
+
+// t2 = MPI_Wtime(); 
+// printf( "Elapsed time is %f\n", t2 - t1 );
+
         init_flag(flag, imax, jmax, delx, dely, &ibound);
         apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
     }
+
+//start MPI
+    MPI_Init(&argc, &argv);
 
     /* Main loop */
     for (t = 0.0; t < t_end; t += del_t, iters++) {
@@ -199,6 +211,8 @@ int main(int argc, char *argv[])
 
         apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
     } /* End of main loop */
+//finish MPI
+    MPI_Finalize();
   
     if (outfile != NULL && strcmp(outfile, "") != 0 && proc == 0) {
         write_bin(u, v, p, flag, imax, jmax, xlength, ylength, outfile);

@@ -4,6 +4,8 @@
 #include "datadef.h"
 #include "init.h"
 
+#include "mpi.h"
+
 #define max(x,y) ((x)>(y)?(x):(y))
 #define min(x,y) ((x)<(y)?(x):(y))
 
@@ -114,13 +116,29 @@ int poisson(float **p, float **rhs, char **flag, int imax, int jmax,
     float rdy2 = 1.0/(dely*dely);
     beta_2 = -omega/(2.0*(rdx2+rdy2));
 
+
+//init MPI
+    MPI_Status stat;
+
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc);
+
+
+
+
     /* Calculate sum of squares */
     for (i = 1; i <= imax; i++) {
         for (j=1; j<=jmax; j++) {
-            if (flag[i][j] & C_F) { p0 += p[i][j]*p[i][j]; }
+            if (flag[i][j] & C_F) { 
+                p0 += p[i][j]*p[i][j]; 
+            }
         }
     }
    
+
+double t1, t2; 
+t1 = MPI_Wtime();
+
     p0 = sqrt(p0/ifull);
     if (p0 < 0.0001) { p0 = 1.0; }
 
@@ -171,6 +189,10 @@ int poisson(float **p, float **rhs, char **flag, int imax, int jmax,
         /* convergence? */
         if (*res<eps) break;
     } /* end of iter */
+
+t2 = MPI_Wtime(); 
+printf( "Elapsed time is %f\n", t2 - t1 );
+exit(0);
 
     return iter;
 }
