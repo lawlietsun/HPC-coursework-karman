@@ -20,6 +20,10 @@ void compute_tentative_velocity(float **u, float **v, float **f, float **g,
     int  i, j;
     float du2dx, duvdy, duvdx, dv2dy, laplu, laplv;
 
+
+// double t1, t2; 
+// t1 = MPI_Wtime();
+
     for (i=1; i<=imax-1; i++) {
         for (j=1; j<=jmax; j++) {
             /* only if both adjacent cells are fluid cells */
@@ -43,6 +47,10 @@ void compute_tentative_velocity(float **u, float **v, float **f, float **g,
             }
         }
     }
+
+// t2 = MPI_Wtime(); 
+// printf( "Elapsed time is %f\n", t2 - t1 );
+// exit(0);
 
     for (i=1; i<=imax; i++) {
         for (j=1; j<=jmax-1; j++) {
@@ -69,6 +77,11 @@ void compute_tentative_velocity(float **u, float **v, float **f, float **g,
         }
     }
 
+// t2 = MPI_Wtime(); 
+// printf( "Elapsed time is %f\n", t2 - t1 );
+// exit(0);
+
+
     /* f & g at external boundaries */
     for (j=1; j<=jmax; j++) {
         f[0][j]    = u[0][j];
@@ -87,6 +100,10 @@ void compute_rhs(float **f, float **g, float **rhs, char **flag, int imax,
 {
     int i, j;
 
+
+// double t1, t2; 
+// t1 = MPI_Wtime();
+
     for (i=1;i<=imax;i++) {
         for (j=1;j<=jmax;j++) {
             if (flag[i][j] & C_F) {
@@ -98,6 +115,9 @@ void compute_rhs(float **f, float **g, float **rhs, char **flag, int imax,
             }
         }
     }
+
+// t2 = MPI_Wtime(); 
+// printf( "Elapsed time is %f\n", t2 - t1 );
 }
 
 
@@ -116,16 +136,6 @@ int poisson(float **p, float **rhs, char **flag, int imax, int jmax,
     float rdy2 = 1.0/(dely*dely);
     beta_2 = -omega/(2.0*(rdx2+rdy2));
 
-
-//init MPI
-    MPI_Status stat;
-
-    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &proc);
-
-
-
-
     /* Calculate sum of squares */
     for (i = 1; i <= imax; i++) {
         for (j=1; j<=jmax; j++) {
@@ -136,16 +146,25 @@ int poisson(float **p, float **rhs, char **flag, int imax, int jmax,
     }
    
 
-double t1, t2; 
-t1 = MPI_Wtime();
+// double t1, t2; 
+// t1 = MPI_Wtime();
+
+    // printf("ileft = %d and iright = %d @ proc %d with size %d\n", *ileft, *iright, proc, *iright-*ileft);
+
+
+    // MPI_Finalize();
+    // exit(0);
 
     p0 = sqrt(p0/ifull);
     if (p0 < 0.0001) { p0 = 1.0; }
 
+                int tag = 0;
+            MPI_Status status;
+
     /* Red/Black SOR-iteration */
     for (iter = 0; iter < itermax; iter++) {
         for (rb = 0; rb <= 1; rb++) {
-            for (i = 1; i <= imax; i++) {
+            for (i = *ileft; i <= *iright; i++) {
                 for (j = 1; j <= jmax; j++) {
                     if ((i+j) % 2 != rb) { continue; }
                     if (flag[i][j] == (C_F | B_NSEW)) {
@@ -168,6 +187,20 @@ t1 = MPI_Wtime();
                     }
                 } /* end of j */
             } /* end of i */
+
+            if(proc!=nprocs-1){
+                MPI_Send(&p[*iright][0],jmax+2,MPI_FLOAT,proc+1,tag,MPI_COMM_WORLD); 
+            }   
+            if(proc>0){ 
+                MPI_Recv(&p[*ileft-1][0],jmax+2,MPI_FLOAT,proc-1,tag,MPI_COMM_WORLD,&status);
+            }   
+            if(proc>0){ 
+                MPI_Send(&p[*ileft][0],jmax+2,MPI_FLOAT,proc-1,tag,MPI_COMM_WORLD);
+            }   
+            if(proc!=nprocs-1){ 
+                MPI_Recv(&p[*iright+1][0],jmax+2,MPI_FLOAT,proc+1,tag,MPI_COMM_WORLD,&status);
+            } 
+
         } /* end of rb */
         
         /* Partial computation of residual */
@@ -184,15 +217,36 @@ t1 = MPI_Wtime();
                 }
             }
         }
+
+        MPI_Allreduce(res,res,1,MPI_FLOAT,MPI_SUM,MPI_COMM_WORLD);
+
         *res = sqrt((*res)/ifull)/p0;
+
+        // printf("%f\n", *res);
 
         /* convergence? */
         if (*res<eps) break;
     } /* end of iter */
 
-t2 = MPI_Wtime(); 
-printf( "Elapsed time is %f\n", t2 - t1 );
-exit(0);
+
+    MPI_Gather(&p[*ileft][0],imax/nprocs*(jmax+2),MPI_FLOAT,&p[*ileft][0],imax/nprocs*(jmax+2),MPI_FLOAT,tag,MPI_COMM_WORLD);
+    if(imax%nprocs)
+    {   if(proc==nprocs-1)  { MPI_Send(&p[imax-imax%nprocs+1][0],imax%nprocs*(jmax+2),MPI_FLOAT,0,tag,MPI_COMM_WORLD);}
+        if(proc==0)  {MPI_Recv(&p[imax-imax%nprocs+1][0],imax%nprocs*(jmax+2),MPI_FLOAT,nprocs-1,tag,MPI_COMM_WORLD,&status);}
+    }
+    MPI_Bcast(&p[0][0],(imax+2)*(jmax+2), MPI_FLOAT,tag,MPI_COMM_WORLD);
+
+
+//     t2 = MPI_Wtime(); 
+//     double td, tt = 0;
+//     int i = 0;
+//     if(proc == 0){
+//         td = t2 - t1;
+//         tt = tt + td;
+//         i ++;
+//     }
+    
+// printf( "Average Elapsed time is %f\n", tt/i );
 
     return iter;
 }

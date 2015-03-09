@@ -8,6 +8,7 @@
 #include "datadef.h"
 #include "init.h"
 #include "simulation.h"
+#include <time.h>
 
 #include "mpi.h"
 
@@ -48,11 +49,17 @@ static struct option long_opts[] = {
 
 int main(int argc, char *argv[])
 {
+
+    // clock_t start = clock(), diff;
+
     int verbose = 1;          /* Verbosity level */
     float xlength = 22.0;     /* Width of simulated domain */
     float ylength = 4.1;      /* Height of simulated domain */
     int imax = 660;           /* Number of cells horizontally */
     int jmax = 120;           /* Number of cells vertically */
+
+    // int imax = 264;           /* Number of cells horizontally */
+    // int jmax = 48;           /* Number of cells vertically */
 
     char *infile;             /* Input raw initial conditions */
     char *outfile;            /* Output raw simulation results */
@@ -168,8 +175,8 @@ int main(int argc, char *argv[])
 
         for (i=0;i<=imax+1;i++) {
             for (j=0;j<=jmax+1;j++) {
-                u[i][j] = ui;
-                v[i][j] = vi;
+                u[i][j] = ui; //1.0
+                v[i][j] = vi; //0.0
                 p[i][j] = 0.0;
             }
         }
@@ -178,11 +185,36 @@ int main(int argc, char *argv[])
 // printf( "Elapsed time is %f\n", t2 - t1 );
 
         init_flag(flag, imax, jmax, delx, dely, &ibound);
-        apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
+        apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi); // ?
     }
 
 //start MPI
     MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc);
+
+    int left, right;
+    left = (imax / nprocs) * proc + 1;
+    right = (imax / nprocs) * (proc + 1);
+
+    if(proc==nprocs-1){
+        if(imax%nprocs){
+            right=imax;
+        }
+    }
+
+    ileft = &left;
+    iright = &right;
+    // double t1, t2; 
+
+
+//     double td, tt = 0;
+// int a = 0;
+        
+    // printf("ileft = %d and iright = %d @ proc %d with size %d\n", left, right, proc, right-left);
+
+    // MPI_Finalize();
+    // exit(0);
 
     /* Main loop */
     for (t = 0.0; t < t_end; t += del_t, iters++) {
@@ -196,8 +228,21 @@ int main(int argc, char *argv[])
         compute_rhs(f, g, rhs, flag, imax, jmax, del_t, delx, dely);
 
         if (ifluid > 0) {
+
+// t1 = MPI_Wtime();
+
             itersor = poisson(p, rhs, flag, imax, jmax, delx, dely,
                         eps, itermax, omega, &res, ifluid);
+
+// t2 = MPI_Wtime(); 
+
+// if(proc == 0){
+//     td = t2 - t1;
+//     tt = tt + td;
+//     a ++;
+// }
+    
+
         } else {
             itersor = 0;
         }
@@ -212,6 +257,10 @@ int main(int argc, char *argv[])
         apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
     } /* End of main loop */
 //finish MPI
+// if(proc){
+//     printf( "Average Elapsed time of poisson() is %f\n", t2 - t1 );
+//     exit(0);
+// }
     MPI_Finalize();
   
     if (outfile != NULL && strcmp(outfile, "") != 0 && proc == 0) {
@@ -225,6 +274,15 @@ int main(int argc, char *argv[])
     free_matrix(p);
     free_matrix(rhs);
     free_matrix(flag);
+
+// diff = clock() - start;
+
+// int msec = diff * 1000 / CLOCKS_PER_SEC;
+// if(proc == 0){
+// printf("Time taken %d seconds %d milliseconds\n", msec/1000, msec%1000);
+// exit(0);
+// }
+
 
     return 0;
 }

@@ -55,9 +55,16 @@ void init_flag(char **flag, int imax, int jmax, float delx, float dely,
     float mx, my, x, y, rad1;
 
     /* Mark a circular obstacle as boundary cells, the rest as fluid */
-    mx = 20.0/41.0*jmax*dely;
-    my = mx;
-    rad1 = 5.0/41.0*jmax*dely;
+    mx = 20.0/41.0*jmax*dely; // 2
+    my = mx; // 2
+    rad1 = 5.0/41.0*jmax*dely; // 0.5
+
+    // printf("mx = %f\n", mx);
+    // printf("my = %f\n", my);
+    // printf("rad1 = %f\n", rad1);
+
+    // exit(0);
+
     for (i=1;i<=imax;i++) {
         for (j=1;j<=jmax;j++) {
             x = (i-0.5)*delx - mx;
@@ -83,11 +90,21 @@ void init_flag(char **flag, int imax, int jmax, float delx, float dely,
         for (j=1; j<=jmax; j++) {
             if (!(flag[i][j] & C_F)) {
                 (*ibound)++;
-                if (flag[i-1][j] & C_F) flag[i][j] |= B_W;
-                if (flag[i+1][j] & C_F) flag[i][j] |= B_E;
-                if (flag[i][j-1] & C_F) flag[i][j] |= B_S;
-                if (flag[i][j+1] & C_F) flag[i][j] |= B_N;
+                if (flag[i-1][j] & C_F) flag[i][j] |= B_W; // flag[i][j] = flag[i][j] | B_W 0004
+                if (flag[i+1][j] & C_F) flag[i][j] |= B_E; // flag[i][j] = flag[i][j] | B_E 0008
+                if (flag[i][j-1] & C_F) flag[i][j] |= B_S; // flag[i][j] = flag[i][j] | B_S 0002
+                if (flag[i][j+1] & C_F) flag[i][j] |= B_N; // flag[i][j] = flag[i][j] | B_N 0001
             }
         }
     }
+
+// printf("%d\n", *ibound);
+// // print all flags 
+//     for (i=0;i<=imax+1;i++) {
+//         for (j=0;j<=jmax+1;j++) {
+//             printf("%x ", flag[i][j]);
+//         }
+//         printf("\n");
+//     }
+//     exit(1);
 }

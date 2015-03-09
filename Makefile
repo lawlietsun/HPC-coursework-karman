@@ -7,7 +7,7 @@ HDRS := $(wildcard $(SRCDIR)/*.h)
 SRCS := $(wildcard $(SRCDIR)/*.c)
 
 CC=mpicc
-CFLAGS=-O3 -Wall -g
+CFLAGS=-O3 -Wall -g -pg
 
 LD := $(CC)
 
